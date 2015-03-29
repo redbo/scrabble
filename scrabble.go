@@ -314,7 +314,7 @@ func (b *Board) DoTurn(player int) {
 			}
 			for _, word := range plays {
 				for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-					if validPlay, points := b.evaluateMove(&move{x: x, y: y, word: word, dir: dir}); validPlay && points > playPoints {
+					if validPlay, points := b.evaluateMove(&move{x: x, y: y, tiles: word, dir: dir}); validPlay && points > playPoints {
 						playX = x
 						playY = y
 						// fmt.Println("Switching to", word, x, y, dir)
