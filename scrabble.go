@@ -26,7 +26,7 @@ var DIR_VERT direction = 0
 var DIR_HORIZ direction = 1
 
 type Board struct {
-	board    []byte
+	board    [][]byte
 	tiles    []byte
 	wordlist map[string]struct{}
 	pscore   [2]int
@@ -49,7 +49,10 @@ func NewBoard(dict string) *Board {
 	for line, _, err := r.ReadLine(); err == nil; line, _, err = r.ReadLine() {
 		board.AddWord(strings.TrimRight(string(line), "\r\n"))
 	}
-	board.board = make([]byte, 225)
+	board.board = make([][]byte, 15)
+	for i := 0; i < 15; i++ {
+		board.board[i] = make([]byte, 15)
+	}
 	board.ptiles = [2][]byte{[]byte{}, []byte{}}
 	board.tiles = []byte(startTiles)
 	for i := range board.tiles {
@@ -78,10 +81,10 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 			centerPlayedHere = true
 		}
 		for i := y; i < 15 && tiles > 0; i++ {
-			if b.board[cti(x, i)] == 0 {
+			if b.board[x][i] == 0 {
 				tiles--
 			}
-			if !contiguous && ((x > 0 && b.board[cti(x-1, i)] != 0) || (x < 14 && b.board[cti(x+1, i)] != 0) || (i > 0 && b.board[cti(x, i-1)] != 0) || (i < 14 && b.board[cti(x, i+1)] != 0)) {
+			if !contiguous && ((x > 0 && b.board[x-1][i] != 0) || (x < 14 && b.board[x+1][i] != 0) || (i > 0 && b.board[x][i-1] != 0) || (i < 14 && b.board[x][i+1] != 0)) {
 				contiguous = true
 			}
 		}
@@ -93,15 +96,15 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 			centerPlayedHere = true
 		}
 		for i := x; i < 15 && tiles > 0; i++ {
-			if b.board[cti(i, y)] == 0 {
+			if b.board[i][y] == 0 {
 				tiles--
 			}
-			if !contiguous && ((i > 0 && b.board[cti(i-1, y)] != 0) || (i < 14 && b.board[cti(i+1, y)] != 0) || (y > 0 && b.board[cti(i, y-1)] != 0) || (y < 14 && b.board[cti(i, y+1)] != 0)) {
+			if !contiguous && ((i > 0 && b.board[i-1][y] != 0) || (i < 14 && b.board[i+1][y] != 0) || (y > 0 && b.board[i][y-1] != 0) || (y < 14 && b.board[i][y+1] != 0)) {
 				contiguous = true
 			}
 		}
 	}
-	return (centerPlayedHere || (b.board[cti(7, 7)] != 0 && contiguous)) && tiles == 0
+	return (centerPlayedHere || (b.board[7][7] != 0 && contiguous)) && tiles == 0
 }
 
 func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (bool, int) {
@@ -111,12 +114,12 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (
 	fullword := make([]byte, 0, 7)
 
 	if dir == DIR_VERT {
-		for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[cti(x, y2-1)] != 0); y2-- {
+		for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[x][y2-1] != 0); y2-- {
 		}
 		for ; y2 < 15; y2++ {
 			idx := cti(x, y2)
-			char := b.board[idx]
-			if plays[idx] != 0 {
+			char := b.board[x][y2]
+			if char == 0 && plays[idx] != 0 {
 				char = plays[idx]
 				if dw[idx] {
 					wordMult *= 2
@@ -135,12 +138,12 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (
 			points += tilePoints[char]
 		}
 	} else {
-		for x2 = x; x2 > 0 && (plays[cti(x2-1, y)] != 0 || b.board[cti(x2-1, y)] != 0); x2-- {
+		for x2 = x; x2 > 0 && (plays[cti(x2-1, y)] != 0 || b.board[x2-1][y] != 0); x2-- {
 		}
 		for ; x2 < 15; x2++ {
 			idx := cti(x2, y)
-			char := b.board[idx]
-			if plays[idx] != 0 {
+			char := b.board[x2][y]
+			if char == 0 && plays[idx] != 0 {
 				char = plays[idx]
 				if dw[idx] {
 					wordMult *= 2
@@ -181,7 +184,7 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 
 	if dir == DIR_VERT {
 		for i := y; len(tiles) > 0; i++ {
-			if b.board[cti(x, i)] == 0 {
+			if b.board[x][i] == 0 {
 				plays[cti(x, i)] = tiles[0]
 				tiles = tiles[1:]
 				if valid, points := b.checkWord(x, i, DIR_HORIZ, false, plays); valid {
@@ -193,7 +196,7 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 		}
 	} else {
 		for i := x; len(tiles) > 0; i++ {
-			if b.board[cti(i, y)] == 0 {
+			if b.board[i][y] == 0 {
 				plays[cti(i, y)] = tiles[0]
 				tiles = tiles[1:]
 				if valid, points := b.checkWord(i, y, DIR_VERT, false, plays); valid {
@@ -211,7 +214,7 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 		return false, 0
 	}
 
-	if plays[cti(7, 7)] == 0 && b.board[cti(7, 7)] == 0 {
+	if plays[cti(7, 7)] == 0 && b.board[7][7] == 0 {
 		return false, 0
 	}
 
@@ -221,18 +224,18 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 func (b *Board) play(x, y int, word string, dir direction) {
 	if dir == DIR_VERT {
 		for i := y; len(word) > 0; i++ {
-			if b.board[cti(x, i)] != 0 {
+			if b.board[x][i] != 0 {
 				continue
 			}
-			b.board[cti(x, i)] = word[0]
+			b.board[x][i] = word[0]
 			word = word[1:]
 		}
 	} else {
 		for i := x; len(word) > 0; i++ {
-			if b.board[cti(i, y)] != 0 {
+			if b.board[i][y] != 0 {
 				continue
 			}
-			b.board[cti(i, y)] = word[0]
+			b.board[i][y] = word[0]
 			word = word[1:]
 		}
 	}
@@ -242,10 +245,10 @@ func (b *Board) PrintBoard() {
 	for y := 0; y < 15; y++ {
 		line := ""
 		for x := 0; x < 15; x++ {
-			if b.board[cti(x, y)] == 0 {
+			if b.board[x][y] == 0 {
 				line += "-"
 			} else {
-				line += string(b.board[cti(x, y)])
+				line += string(b.board[x][y])
 			}
 			line += " "
 		}
@@ -293,7 +296,7 @@ func (b *Board) DoTurn(player int) {
 
 	for x := 0; x < 15; x++ {
 		for y := 0; y < 15; y++ {
-			if b.board[cti(x, y)] != 0 {
+			if b.board[x][y] != 0 {
 				continue
 			}
 			for _, word := range plays {
