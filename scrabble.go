@@ -271,8 +271,8 @@ func (b *Board) PrintBoard() {
 		fmt.Println(line)
 	}
 	fmt.Println()
-	fmt.Println("Player 1:", b.pscore[0])
-	fmt.Println("Player 2:", b.pscore[1])
+	fmt.Println("Player 1:", b.pscore[0], "-", string(b.ptiles[0]))
+	fmt.Println("Player 2:", b.pscore[1], "-", string(b.ptiles[1]))
 }
 
 func permute(s []byte) []string {
