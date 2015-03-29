@@ -16,7 +16,7 @@ var tilePoints = [255]int{'E': 1, 'A': 1, 'I': 1, 'O': 1, 'N': 1, 'R': 1, 'T': 1
 var startTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
 
 var tw = [225]bool{0: true, 7: true, 14: true, 105: true, 210: true, 217: true, 224: true}
-var dw = [225]bool{16: true, 28: true, 32: true, 42: true, 48: true, 56: true, 64: true, 70: true, 154: true, 160: true, 168: true, 176: true, 182: true, 192: true, 196: true, 208: true}
+var dw = [225]bool{16: true, 28: true, 32: true, 42: true, 48: true, 56: true, 64: true, 70: true, 112: true, 154: true, 160: true, 168: true, 176: true, 182: true, 192: true, 196: true, 208: true}
 var tl = [225]bool{20: true, 24: true, 76: true, 80: true, 84: true, 88: true, 136: true, 140: true, 144: true, 148: true, 200: true, 204: true}
 var dl = [225]bool{3: true, 11: true, 36: true, 38: true, 45: true, 52: true, 59: true, 92: true, 96: true, 98: true, 102: true, 108: true, 122: true, 126: true, 128: true, 132: true, 165: true, 172: true, 179: true, 186: true, 188: true, 213: true, 221: true}
 
