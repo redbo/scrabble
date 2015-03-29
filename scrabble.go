@@ -71,6 +71,9 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 	contiguous := false
 	centerPlayedHere := false
 	if dir == DIR_VERT {
+		if y+tiles > 14 {
+			return false
+		}
 		if x == 7 && y <= 7 && (y+tiles) >= 7 {
 			centerPlayedHere = true
 		}
@@ -83,6 +86,9 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 			}
 		}
 	} else {
+		if x+tiles > 14 {
+			return false
+		}
 		if y == 7 && x <= 7 && (x+tiles) >= 7 {
 			centerPlayedHere = true
 		}
@@ -101,8 +107,8 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (bool, int) {
 	points := 0
 	wordMult := 1
-	fullword := make([]byte, 0, 7)
 	var x2, y2 int
+	fullword := make([]byte, 0, 7)
 
 	if dir == DIR_VERT {
 		for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[cti(x, y2-1)] != 0); y2-- {
@@ -166,7 +172,7 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (
 }
 
 func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
-	plays := make([]byte, 225)
+	var plays = make([]byte, 225)
 	playPoints := 0
 
 	if !b.checkGeometry(x, y, len(tiles), dir) {
