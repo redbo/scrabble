@@ -111,7 +111,18 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 	return (centerPlayedHere || (centerWasPlayed && contiguous)) && spaces >= tiles
 }
 
-func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
+type move struct {
+	x, y  int
+	tiles string
+	dir   direction
+}
+
+func (b *Board) evaluateMove(mv *move) (bool, int) {
+	x := mv.x
+	y := mv.y
+	tiles := mv.tiles
+	dir := mv.dir
+
 	plays := make(map[int]byte)
 	playPoints := 0
 
@@ -303,7 +314,7 @@ func (b *Board) DoTurn(player int) {
 			}
 			for _, word := range plays {
 				for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-					if validPlay, points := b.evaluateMove(x, y, word, dir); validPlay && points > playPoints {
+					if validPlay, points := b.evaluateMove(&move{x: x, y: y, word: word, dir: dir}); validPlay && points > playPoints {
 						playX = x
 						playY = y
 						// fmt.Println("Switching to", word, x, y, dir)
