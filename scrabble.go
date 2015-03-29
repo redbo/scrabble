@@ -40,15 +40,6 @@ func cti(x int, y int) int {
 func NewBoard(dict string) *Board {
 	board := &Board{}
 	board.wordlist = make(map[string]struct{})
-	f, err := os.Open(dict)
-	if err != nil {
-		fmt.Println("Unable to open dictionary", err)
-		return nil
-	}
-	r := bufio.NewReader(f)
-	for line, _, err := r.ReadLine(); err == nil; line, _, err = r.ReadLine() {
-		board.AddWord(strings.TrimRight(string(line), "\r\n"))
-	}
 	board.board = make([][]byte, 15)
 	for i := 0; i < 15; i++ {
 		board.board[i] = make([]byte, 15)
@@ -59,15 +50,21 @@ func NewBoard(dict string) *Board {
 		j := rand.Intn(i + 1)
 		board.tiles[i], board.tiles[j] = board.tiles[j], board.tiles[i]
 	}
+	f, err := os.Open(dict)
+	if err != nil {
+		fmt.Println("Unable to open dictionary", err)
+		return nil
+	}
+	r := bufio.NewReader(f)
+	for line, _, err := r.ReadLine(); err == nil; line, _, err = r.ReadLine() {
+		word := strings.TrimRight(string(line), "\r\n")
+		if len(word) > 1 {
+			board.wordlist[word] = struct{}{}
+		}
+	}
 	board.ptiles[0], board.tiles = board.tiles[:7], board.tiles[7:]
 	board.ptiles[1], board.tiles = board.tiles[:7], board.tiles[7:]
 	return board
-}
-
-func (b *Board) AddWord(word string) {
-	if len(word) > 1 {
-		b.wordlist[word] = struct{}{}
-	}
 }
 
 func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
@@ -175,18 +172,20 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (
 }
 
 func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
-	var plays = make([]byte, 225)
 	playPoints := 0
+	tilei := 0
 
 	if !b.checkGeometry(x, y, len(tiles), dir) {
 		return false, 0
 	}
 
+	var plays = make([]byte, 225)
+
 	if dir == DIR_VERT {
-		for i := y; len(tiles) > 0; i++ {
+		for i := y; len(tiles) > tilei; i++ {
 			if b.board[x][i] == 0 {
-				plays[cti(x, i)] = tiles[0]
-				tiles = tiles[1:]
+				plays[cti(x, i)] = tiles[tilei]
+				tilei++
 				if valid, points := b.checkWord(x, i, DIR_HORIZ, false, plays); valid {
 					playPoints += points
 				} else {
@@ -195,10 +194,10 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 			}
 		}
 	} else {
-		for i := x; len(tiles) > 0; i++ {
+		for i := x; len(tiles) > tilei; i++ {
 			if b.board[i][y] == 0 {
-				plays[cti(i, y)] = tiles[0]
-				tiles = tiles[1:]
+				plays[cti(i, y)] = tiles[tilei]
+				tilei++
 				if valid, points := b.checkWord(i, y, DIR_VERT, false, plays); valid {
 					playPoints += points
 				} else {
@@ -255,8 +254,8 @@ func (b *Board) PrintBoard() {
 		fmt.Println(line)
 	}
 	fmt.Println()
-	fmt.Println("Player 1:", b.pscore[0], "-", string(b.ptiles[0]))
-	fmt.Println("Player 2:", b.pscore[1], "-", string(b.ptiles[1]))
+	fmt.Println("Player 1:", b.pscore[0])
+	fmt.Println("Player 2:", b.pscore[1])
 }
 
 func permute(s []byte) []string {
