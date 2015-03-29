@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -307,6 +309,30 @@ func (b *Board) DoTurn(player int) {
 	var playWord string
 	var playDir direction
 	plays := permute(b.ptiles[player])
+	mvchan := make(chan *move)
+	wg := sync.WaitGroup{}
+	m := sync.Mutex{}
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			for mv, ok := <-mvchan; ok; mv, ok = <-mvchan {
+				validPlay, points := b.evaluateMove(mv)
+				m.Lock()
+				if validPlay && points > playPoints {
+					playX = mv.x
+					playY = mv.y
+					// fmt.Println("Switching to", word, x, y, dir)
+					playWord = mv.tiles
+					playPoints = points
+					playDir = mv.dir
+				}
+				m.Unlock()
+			}
+			wg.Done()
+		}()
+	}
+
 	for x := 0; x < 15; x++ {
 		for y := 0; y < 15; y++ {
 			if b.board[cti(x, y)] != 0 {
@@ -314,18 +340,13 @@ func (b *Board) DoTurn(player int) {
 			}
 			for _, word := range plays {
 				for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-					if validPlay, points := b.evaluateMove(&move{x: x, y: y, tiles: word, dir: dir}); validPlay && points > playPoints {
-						playX = x
-						playY = y
-						// fmt.Println("Switching to", word, x, y, dir)
-						playWord = word
-						playPoints = points
-						playDir = dir
-					}
+					mvchan <- &move{x: x, y: y, tiles: word, dir: dir}
 				}
 			}
 		}
 	}
+	close(mvchan)
+	wg.Wait()
 	if playWord == "" {
 		fmt.Println("NO WORD FOUND - PASSING")
 		return
@@ -347,6 +368,7 @@ func (b *Board) PlayersHaveTiles() bool {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	rand.Seed(time.Now().Unix())
 
 	b := NewBoard("dictionary.txt")
