@@ -101,7 +101,7 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (bool, int) {
 	points := 0
 	wordMult := 1
-	fullword := []byte{}
+	fullword := make([]byte, 0, 7)
 	var x2, y2 int
 
 	if dir == DIR_VERT {
