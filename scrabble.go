@@ -104,11 +104,11 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 	return (centerPlayedHere || (b.board[7][7] != 0 && contiguous)) && tiles == 0
 }
 
-func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (bool, int) {
+func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte, scratch []byte) (bool, int) {
 	points := 0
 	wordMult := 1
 	var x2, y2 int
-	fullword := make([]byte, 0, 7)
+	fullword := scratch[:0]
 
 	if dir == DIR_VERT {
 		for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[x][y2-1] != 0); y2-- {
@@ -179,14 +179,15 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 		return false, 0
 	}
 
-	var plays = make([]byte, 225)
+	plays := make([]byte, 225)
+	scratch := make([]byte, 0, 10)
 
 	if dir == DIR_VERT {
 		for i := y; len(tiles) > tilei; i++ {
 			if b.board[x][i] == 0 {
 				plays[cti(x, i)] = tiles[tilei]
 				tilei++
-				if valid, points := b.checkWord(x, i, DIR_HORIZ, false, plays); valid {
+				if valid, points := b.checkWord(x, i, DIR_HORIZ, false, plays, scratch); valid {
 					playPoints += points
 				} else {
 					return false, 0
@@ -198,7 +199,7 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 			if b.board[i][y] == 0 {
 				plays[cti(i, y)] = tiles[tilei]
 				tilei++
-				if valid, points := b.checkWord(i, y, DIR_VERT, false, plays); valid {
+				if valid, points := b.checkWord(i, y, DIR_VERT, false, plays, scratch); valid {
 					playPoints += points
 				} else {
 					return false, 0
@@ -207,7 +208,7 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 		}
 	}
 
-	if valid, points := b.checkWord(x, y, dir, true, plays); valid {
+	if valid, points := b.checkWord(x, y, dir, true, plays, scratch); valid {
 		playPoints += points
 	} else {
 		return false, 0
