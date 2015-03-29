@@ -68,36 +68,101 @@ func (b *Board) AddWord(word string) {
 }
 
 func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
-	spaces := 0
 	contiguous := false
-	centerWasPlayed := b.board[cti(7, 7)] != 0
 	centerPlayedHere := false
 	if dir == DIR_VERT {
-		for i := y; i < 15 && tiles > spaces; i++ {
+		if x == 7 && y <= 7 && (y+tiles) >= 7 {
+			centerPlayedHere = true
+		}
+		for i := y; i < 15 && tiles > 0; i++ {
 			if b.board[cti(x, i)] == 0 {
-				spaces++
+				tiles--
 			}
 			if !contiguous && ((x > 0 && b.board[cti(x-1, i)] != 0) || (x < 14 && b.board[cti(x+1, i)] != 0) || (i > 0 && b.board[cti(x, i-1)] != 0) || (i < 14 && b.board[cti(x, i+1)] != 0)) {
 				contiguous = true
 			}
 		}
-		if x == 7 && y <= 7 && (y+tiles) >= 7 {
+	} else {
+		if y == 7 && x <= 7 && (x+tiles) >= 7 {
 			centerPlayedHere = true
 		}
-	} else {
-		for i := x; i < 15 && tiles > spaces; i++ {
+		for i := x; i < 15 && tiles > 0; i++ {
 			if b.board[cti(i, y)] == 0 {
-				spaces++
+				tiles--
 			}
 			if !contiguous && ((i > 0 && b.board[cti(i-1, y)] != 0) || (i < 14 && b.board[cti(i+1, y)] != 0) || (y > 0 && b.board[cti(i, y-1)] != 0) || (y < 14 && b.board[cti(i, y+1)] != 0)) {
 				contiguous = true
 			}
 		}
-		if y == 7 && x <= 7 && (x+tiles) >= 7 {
-			centerPlayedHere = true
+	}
+	return (centerPlayedHere || (b.board[cti(7, 7)] != 0 && contiguous)) && tiles == 0
+}
+
+func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte) (bool, int) {
+	points := 0
+	wordMult := 1
+	fullword := []byte{}
+	var x2, y2 int
+
+	if dir == DIR_VERT {
+		for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[cti(x, y2-1)] != 0); y2-- {
+		}
+		for ; y2 < 15; y2++ {
+			idx := cti(x, y2)
+			char := b.board[idx]
+			if plays[idx] != 0 {
+				char = plays[idx]
+				if dw[idx] {
+					wordMult *= 2
+				} else if tw[idx] {
+					wordMult *= 3
+				} else if dl[idx] {
+					points += tilePoints[char]
+				} else if tl[idx] {
+					points += tilePoints[char] + tilePoints[char]
+				}
+			}
+			if char == 0 {
+				break
+			}
+			fullword = append(fullword, char)
+			points += tilePoints[char]
+		}
+	} else {
+		for x2 = x; x2 > 0 && (plays[cti(x2-1, y)] != 0 || b.board[cti(x2-1, y)] != 0); x2-- {
+		}
+		for ; x2 < 15; x2++ {
+			idx := cti(x2, y)
+			char := b.board[idx]
+			if plays[idx] != 0 {
+				char = plays[idx]
+				if dw[idx] {
+					wordMult *= 2
+				} else if tw[idx] {
+					wordMult *= 3
+				} else if dl[idx] {
+					points += tilePoints[char]
+				} else if tl[idx] {
+					points += tilePoints[char] + tilePoints[char]
+				}
+			}
+			if char == 0 {
+				break
+			}
+			fullword = append(fullword, char)
+			points += tilePoints[char]
 		}
 	}
-	return (centerPlayedHere || (centerWasPlayed && contiguous)) && spaces >= tiles
+	if len(fullword) == 1 {
+		if primary {
+			return false, 0
+		} else {
+			return true, 0
+		}
+	} else if _, ok := b.wordlist[string(fullword)]; !ok {
+		return false, 0
+	}
+	return true, points * wordMult
 }
 
 func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
@@ -108,94 +173,36 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 		return false, 0
 	}
 
-	checkWord := func(x, y int, dir direction, primary bool) (bool, int) {
-		points := 0
-		doubleWord := 1
-		tripleWord := 1
-		fullword := []byte{}
-		var x2, y2 int
-
-		countLetter := func(x, y int) bool {
-			idx := cti(x, y)
-			char := b.board[idx]
-			if plays[idx] != 0 {
-				char = plays[idx]
-				if dw[idx] {
-					doubleWord *= 2
-				} else if tw[idx] {
-					tripleWord *= 3
-				} else if dl[idx] {
-					points += tilePoints[char]
-				} else if tl[idx] {
-					points += tilePoints[char] + tilePoints[char]
-				}
-			}
-			if char != 0 {
-				fullword = append(fullword, char)
-				points += tilePoints[char]
-				return true
-			}
-			return false
-		}
-
-		if dir == DIR_VERT {
-			for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[cti(x, y2-1)] != 0); y2-- {
-			}
-			for ; y2 < 15 && countLetter(x, y2); y2++ {
-			}
-		} else {
-			for x2 = x; x2 > 0 && (plays[cti(x2-1, y)] != 0 || b.board[cti(x2-1, y)] != 0); x2-- {
-			}
-			for ; x2 < 15 && countLetter(x2, y); x2++ {
-			}
-		}
-		if len(fullword) == 1 {
-			if primary {
-				return false, 0
-			} else {
-				return true, 0
-			}
-		} else if _, ok := b.wordlist[string(fullword)]; !ok {
-			return false, 0
-		}
-		return true, points * tripleWord * doubleWord
-	}
-
 	if dir == DIR_VERT {
 		for i := y; len(tiles) > 0; i++ {
 			if b.board[cti(x, i)] == 0 {
 				plays[cti(x, i)] = tiles[0]
 				tiles = tiles[1:]
-				if valid, points := checkWord(x, i, DIR_HORIZ, false); valid {
+				if valid, points := b.checkWord(x, i, DIR_HORIZ, false, plays); valid {
 					playPoints += points
 				} else {
 					return false, 0
 				}
 			}
-		}
-
-		if valid, points := checkWord(x, y, DIR_VERT, true); valid {
-			playPoints += points
-		} else {
-			return false, 0
 		}
 	} else {
 		for i := x; len(tiles) > 0; i++ {
 			if b.board[cti(i, y)] == 0 {
 				plays[cti(i, y)] = tiles[0]
 				tiles = tiles[1:]
-				if valid, points := checkWord(i, y, DIR_VERT, false); valid {
+				if valid, points := b.checkWord(i, y, DIR_VERT, false, plays); valid {
 					playPoints += points
 				} else {
 					return false, 0
 				}
 			}
 		}
-		if valid, points := checkWord(x, y, DIR_HORIZ, true); valid {
-			playPoints += points
-		} else {
-			return false, 0
-		}
+	}
+
+	if valid, points := b.checkWord(x, y, dir, true, plays); valid {
+		playPoints += points
+	} else {
+		return false, 0
 	}
 
 	if plays[cti(7, 7)] == 0 && b.board[cti(7, 7)] == 0 {
