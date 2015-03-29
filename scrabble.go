@@ -284,6 +284,10 @@ func permute(s []byte) []string {
 			keys = append(keys, key)
 		}
 	}
+	for i := len(keys) - 1; i > 0; i-- {
+		j := rand.Int() % i
+		keys[i], keys[j] = keys[j], keys[i]
+	}
 	return keys
 }
 
@@ -293,8 +297,8 @@ func (b *Board) DoTurn(player int) {
 	var playDir direction
 	plays := permute(b.ptiles[player])
 
-	for x := 0; x < 15; x++ {
-		for y := 0; y < 15; y++ {
+	for _, x := range rand.Perm(15) {
+		for _, y := range rand.Perm(15) {
 			if b.board[x][y] != 0 {
 				continue
 			}
