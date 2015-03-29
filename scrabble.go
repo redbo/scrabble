@@ -100,31 +100,12 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 	return (centerPlayedHere || (centerWasPlayed && contiguous)) && spaces >= tiles
 }
 
-type move struct {
-	x, y  int
-	tiles string
-	dir   direction
-}
-
-func (b *Board) evaluateMove(mv *move) (bool, int) {
-	x := mv.x
-	y := mv.y
-	tiles := mv.tiles
-	dir := mv.dir
-
+func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
 	plays := make([]byte, 225)
 	playPoints := 0
 
 	if !b.checkGeometry(x, y, len(tiles), dir) {
 		return false, 0
-	}
-
-	interped := func(x, y int) byte {
-		i := cti(x, y)
-		if plays[i] != 0 {
-			return plays[i]
-		}
-		return b.board[i]
 	}
 
 	checkWord := func(x, y int, dir direction, primary bool) (bool, int) {
@@ -158,12 +139,12 @@ func (b *Board) evaluateMove(mv *move) (bool, int) {
 		}
 
 		if dir == DIR_VERT {
-			for y2 = y; y2 > 0 && interped(x, y2-1) != 0; y2-- {
+			for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[cti(x, y2-1)] != 0); y2-- {
 			}
 			for ; y2 < 15 && countLetter(x, y2); y2++ {
 			}
 		} else {
-			for x2 = x; x2 > 0 && interped(x2-1, y) != 0; x2-- {
+			for x2 = x; x2 > 0 && (plays[cti(x2-1, y)] != 0 || b.board[cti(x2-1, y)] != 0); x2-- {
 			}
 			for ; x2 < 15 && countLetter(x2, y); x2++ {
 			}
@@ -217,7 +198,7 @@ func (b *Board) evaluateMove(mv *move) (bool, int) {
 		}
 	}
 
-	if interped(7, 7) == 0 {
+	if plays[cti(7, 7)] == 0 && b.board[cti(7, 7)] == 0 {
 		return false, 0
 	}
 
@@ -304,15 +285,12 @@ func (b *Board) DoTurn(player int) {
 			}
 			for _, word := range plays {
 				for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-					mv := &move{x: x, y: y, tiles: word, dir: dir}
-					validPlay, points := b.evaluateMove(mv)
-					if validPlay && points > playPoints {
-						playX = mv.x
-						playY = mv.y
-						// fmt.Println("Switching to", word, x, y, dir)
-						playWord = mv.tiles
+					if validPlay, points := b.evaluateMove(x, y, word, dir); validPlay && points > playPoints {
+						playX = x
+						playY = y
+						playWord = word
 						playPoints = points
-						playDir = mv.dir
+						playDir = dir
 					}
 				}
 			}
