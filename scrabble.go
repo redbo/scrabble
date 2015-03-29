@@ -8,7 +8,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -78,13 +77,7 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 			if b.board[cti(x, i)] == 0 {
 				spaces++
 			}
-			if x > 0 && b.board[cti(x-1, i)] != 0 {
-				contiguous = true
-			} else if x < 14 && b.board[cti(x+1, i)] != 0 {
-				contiguous = true
-			} else if i > 0 && b.board[cti(x, i-1)] != 0 {
-				contiguous = true
-			} else if i < 14 && b.board[cti(x, i+1)] != 0 {
+			if !contiguous && ((x > 0 && b.board[cti(x-1, i)] != 0) || (x < 14 && b.board[cti(x+1, i)] != 0) || (i > 0 && b.board[cti(x, i-1)] != 0) || (i < 14 && b.board[cti(x, i+1)] != 0)) {
 				contiguous = true
 			}
 		}
@@ -96,13 +89,7 @@ func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
 			if b.board[cti(i, y)] == 0 {
 				spaces++
 			}
-			if i > 0 && b.board[cti(i-1, y)] != 0 {
-				contiguous = true
-			} else if i < 14 && b.board[cti(i+1, y)] != 0 {
-				contiguous = true
-			} else if y > 0 && b.board[cti(i, y-1)] != 0 {
-				contiguous = true
-			} else if y < 14 && b.board[cti(i, y+1)] != 0 {
+			if !contiguous && ((i > 0 && b.board[cti(i-1, y)] != 0) || (i < 14 && b.board[cti(i+1, y)] != 0) || (y > 0 && b.board[cti(i, y-1)] != 0) || (y < 14 && b.board[cti(i, y+1)] != 0)) {
 				contiguous = true
 			}
 		}
@@ -125,7 +112,7 @@ func (b *Board) evaluateMove(mv *move) (bool, int) {
 	tiles := mv.tiles
 	dir := mv.dir
 
-	plays := make(map[int]byte)
+	plays := make([]byte, 225)
 	playPoints := 0
 
 	if !b.checkGeometry(x, y, len(tiles), dir) {
@@ -134,8 +121,8 @@ func (b *Board) evaluateMove(mv *move) (bool, int) {
 
 	interped := func(x, y int) byte {
 		i := cti(x, y)
-		if val, ok := plays[i]; ok {
-			return val
+		if plays[i] != 0 {
+			return plays[i]
 		}
 		return b.board[i]
 	}
@@ -150,8 +137,8 @@ func (b *Board) evaluateMove(mv *move) (bool, int) {
 		countLetter := func(x, y int) bool {
 			idx := cti(x, y)
 			char := b.board[idx]
-			if val, ok := plays[idx]; ok {
-				char = val
+			if plays[idx] != 0 {
+				char = plays[idx]
 				if dw[idx] {
 					doubleWord *= 2
 				} else if tw[idx] {
@@ -309,29 +296,6 @@ func (b *Board) DoTurn(player int) {
 	var playWord string
 	var playDir direction
 	plays := permute(b.ptiles[player])
-	mvchan := make(chan *move)
-	wg := sync.WaitGroup{}
-	m := sync.Mutex{}
-
-	for i := 0; i < runtime.NumCPU(); i++ {
-		wg.Add(1)
-		go func() {
-			for mv, ok := <-mvchan; ok; mv, ok = <-mvchan {
-				validPlay, points := b.evaluateMove(mv)
-				m.Lock()
-				if validPlay && points > playPoints {
-					playX = mv.x
-					playY = mv.y
-					// fmt.Println("Switching to", word, x, y, dir)
-					playWord = mv.tiles
-					playPoints = points
-					playDir = mv.dir
-				}
-				m.Unlock()
-			}
-			wg.Done()
-		}()
-	}
 
 	for x := 0; x < 15; x++ {
 		for y := 0; y < 15; y++ {
@@ -340,13 +304,20 @@ func (b *Board) DoTurn(player int) {
 			}
 			for _, word := range plays {
 				for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-					mvchan <- &move{x: x, y: y, tiles: word, dir: dir}
+					mv := &move{x: x, y: y, tiles: word, dir: dir}
+					validPlay, points := b.evaluateMove(mv)
+					if validPlay && points > playPoints {
+						playX = mv.x
+						playY = mv.y
+						// fmt.Println("Switching to", word, x, y, dir)
+						playWord = mv.tiles
+						playPoints = points
+						playDir = mv.dir
+					}
 				}
 			}
 		}
 	}
-	close(mvchan)
-	wg.Wait()
 	if playWord == "" {
 		fmt.Println("NO WORD FOUND - PASSING")
 		return
