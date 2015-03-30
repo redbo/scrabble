@@ -13,7 +13,7 @@ import (
 
 // https://en.wikipedia.org/wiki/Scrabble_letter_distributions
 var tilePoints = [255]int{'E': 1, 'A': 1, 'I': 1, 'O': 1, 'N': 1, 'R': 1, 'T': 1, 'L': 1, 'S': 1, 'U': 1, 'D': 2, 'G': 2, 'B': 3, 'C': 3, 'M': 3, 'P': 3, 'F': 4, 'H': 4, 'V': 4, 'W': 4, 'Y': 4, 'K': 5, 'J': 8, 'X': 8, 'Q': 10, 'Z': 10}
-var startTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
+var startTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ**"
 
 var tw = [225]bool{0: true, 7: true, 14: true, 105: true, 210: true, 217: true, 224: true}
 var dw = [225]bool{16: true, 28: true, 32: true, 42: true, 48: true, 56: true, 64: true, 70: true, 112: true, 154: true, 160: true, 168: true, 176: true, 182: true, 192: true, 196: true, 208: true}
@@ -165,7 +165,7 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte, s
 		} else {
 			return true, 0
 		}
-	} else if _, ok := b.wordlist[string(fullword)]; !ok {
+	} else if _, ok := b.wordlist[strings.ToUpper(string(fullword))]; !ok {
 		return false, 0
 	}
 	return true, points * wordMult
@@ -281,7 +281,14 @@ func permute(s []byte) []string {
 	}
 	keys := make([]string, 0, len(subsets))
 	for key, _ := range subsets {
-		if len(key) > 0 {
+		if strings.Count(key, "*") == 1 {
+			wi := strings.Index(key, "*")
+			for c := 'a'; c <= 'z'; c++ {
+				keys = append(keys, key[:wi]+string(c)+key[wi+1:])
+			}
+		} else if strings.Count(key, "*") == 2 {
+			continue // TODO
+		} else if len(key) > 0 {
 			keys = append(keys, key)
 		}
 	}
@@ -322,6 +329,9 @@ func (b *Board) DoTurn(player int) {
 	}
 	b.play(playX, playY, playWord, playDir)
 	for _, c := range playWord {
+		if c >= 'a' && c <= 'z' {
+			c = '*'
+		}
 		idx := bytes.IndexRune(b.ptiles[player], c)
 		b.ptiles[player] = append(b.ptiles[player][:idx], b.ptiles[player][idx+1:]...)
 	}
