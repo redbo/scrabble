@@ -59,12 +59,21 @@ func NewBoard(dict string) *Board {
 	for line, _, err := r.ReadLine(); err == nil; line, _, err = r.ReadLine() {
 		word := strings.TrimRight(string(line), "\r\n")
 		if len(word) > 1 {
-			board.wordlist[word] = struct{}{}
+			board.addWord(word)
 		}
 	}
 	board.ptiles[0], board.tiles = board.tiles[:7], board.tiles[7:]
 	board.ptiles[1], board.tiles = board.tiles[:7], board.tiles[7:]
 	return board
+}
+
+func (b *Board) addWord(word string) {
+	b.wordlist[word] = struct{}{}
+}
+
+func (b *Board) hasWord(word string) bool {
+	_, ok := b.wordlist[word]
+	return ok
 }
 
 func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
@@ -165,7 +174,7 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte, s
 		} else {
 			return true, 0
 		}
-	} else if _, ok := b.wordlist[strings.ToUpper(string(fullword))]; !ok {
+	} else if !b.hasWord(strings.ToUpper(string(fullword))) {
 		return false, 0
 	}
 	return true, points * wordMult
@@ -174,11 +183,6 @@ func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte, s
 func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
 	playPoints := 0
 	tilei := 0
-
-	if !b.checkGeometry(x, y, len(tiles), dir) {
-		return false, 0
-	}
-
 	plays := make([]byte, 225)
 	scratch := make([]byte, 0, 10)
 
@@ -310,14 +314,22 @@ func (b *Board) DoTurn(player int) {
 			if b.board[x][y] != 0 {
 				continue
 			}
-			for _, word := range plays {
-				for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-					if validPlay, points := b.evaluateMove(x, y, word, dir); validPlay && points > playPoints {
-						playX = x
-						playY = y
-						playWord = word
-						playPoints = points
-						playDir = dir
+			for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
+				for wordlen := 0; wordlen < 7; wordlen++ {
+					if !b.checkGeometry(x, y, wordlen, dir) {
+						continue
+					}
+					for _, word := range plays {
+						if len(word) != wordlen {
+							continue
+						}
+						if validPlay, points := b.evaluateMove(x, y, word, dir); validPlay && points > playPoints {
+							playX = x
+							playY = y
+							playWord = word
+							playPoints = points
+							playDir = dir
+						}
 					}
 				}
 			}
