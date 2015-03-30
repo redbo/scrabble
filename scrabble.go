@@ -250,11 +250,20 @@ func (b *Board) PrintBoard() {
 		line := ""
 		for x := 0; x < 15; x++ {
 			if b.board[x][y] == 0 {
-				line += "-"
+				if dw[cti(x, y)] {
+					line += "\x1b[31;1m"
+				} else if tw[cti(x, y)] {
+					line += "\x1b[33;1m"
+				} else if dl[cti(x, y)] {
+					line += "\x1b[34;1m"
+				} else if tl[cti(x, y)] {
+					line += "\x1b[32;1m"
+				}
+				line += "."
 			} else {
 				line += string(b.board[x][y])
 			}
-			line += " "
+			line += "\x1b[0m "
 		}
 		fmt.Println(line)
 	}
@@ -290,7 +299,7 @@ func permute(s []byte) []string {
 			for c := 'a'; c <= 'z'; c++ {
 				keys = append(keys, key[:wi]+string(c)+key[wi+1:])
 			}
-		} else if strings.Count(key, "*") == 2 {
+		} else if strings.Count(key, "*") > 0 {
 			continue // TODO
 		} else if len(key) > 0 {
 			keys = append(keys, key)
@@ -340,6 +349,7 @@ func (b *Board) DoTurn(player int) {
 		return
 	}
 	b.play(playX, playY, playWord, playDir)
+	fmt.Println("Play", playWord, "for", playPoints, "points")
 	for _, c := range playWord {
 		if c >= 'a' && c <= 'z' {
 			c = '*'
