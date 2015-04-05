@@ -11,6 +11,32 @@ import (
 	"time"
 )
 
+type FNV struct {
+	v uint64
+	// debug []byte
+}
+
+func NewFNV() FNV {
+	return FNV{v: 0xcbf29ce484222325}
+}
+
+func (h *FNV) Add(b byte) {
+	h.v *= 0x100000001b3
+	h.v ^= uint64(b & ^byte(32))
+	// h.debug = append(h.debug, b)
+}
+
+func (h *FNV) AddString(s string) {
+	for _, c := range s {
+		h.v *= 0x100000001b3
+		h.v ^= uint64(c)
+	}
+}
+
+func (h *FNV) Val() uint64 {
+	return uint64(h.v)
+}
+
 // https://en.wikipedia.org/wiki/Scrabble_letter_distributions
 var tilePoints = [255]int{'E': 1, 'A': 1, 'I': 1, 'O': 1, 'N': 1, 'R': 1, 'T': 1, 'L': 1, 'S': 1, 'U': 1, 'D': 2, 'G': 2, 'B': 3, 'C': 3, 'M': 3, 'P': 3, 'F': 4, 'H': 4, 'V': 4, 'W': 4, 'Y': 4, 'K': 5, 'J': 8, 'X': 8, 'Q': 10, 'Z': 10}
 var startTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ**"
@@ -28,7 +54,7 @@ var DIR_HORIZ direction = 1
 type Board struct {
 	board    [][]byte
 	tiles    []byte
-	wordlist map[string]struct{}
+	wordlist map[uint64]struct{}
 	pscore   [2]int
 	ptiles   [2][]byte
 }
@@ -39,7 +65,7 @@ func cti(x int, y int) int {
 
 func NewBoard(dict string) *Board {
 	board := &Board{}
-	board.wordlist = make(map[string]struct{})
+	board.wordlist = make(map[uint64]struct{})
 	board.board = make([][]byte, 15)
 	for i := 0; i < 15; i++ {
 		board.board[i] = make([]byte, 15)
@@ -68,134 +94,119 @@ func NewBoard(dict string) *Board {
 }
 
 func (b *Board) addWord(word string) {
-	b.wordlist[word] = struct{}{}
+	f := NewFNV()
+	f.AddString(word)
+	b.wordlist[f.Val()] = struct{}{}
 }
-
-func (b *Board) hasWord(word string) bool {
-	_, ok := b.wordlist[word]
-	return ok
-}
-
-func (b *Board) checkGeometry(x, y, tiles int, dir direction) bool {
-	contiguous := false
-	centerPlayedHere := false
+func (b *Board) checkCenterPlayed(x, y, tiles int, dir direction) bool {
+	if b.board[7][7] != 0 {
+		return true
+	}
 	if dir == DIR_VERT {
-		if y+tiles > 14 {
-			return false
-		}
-		if x == 7 && y <= 7 && (y+tiles) >= 7 {
-			centerPlayedHere = true
-		}
-		for i := y; i < 15 && tiles > 0; i++ {
+		return x == 7 && y <= 7 && (y+tiles) >= 7
+	} else {
+		return y == 7 && x <= 7 && (x+tiles) >= 7
+	}
+}
+
+func (b *Board) checkContiguous(x, y, tiles int, dir direction) bool {
+	if b.board[7][7] == 0 {
+		return true
+	}
+	if dir == DIR_VERT {
+		for i := y; tiles > 0; i++ {
 			if b.board[x][i] == 0 {
 				tiles--
 			}
-			if !contiguous && ((x > 0 && b.board[x-1][i] != 0) || (x < 14 && b.board[x+1][i] != 0) || (i > 0 && b.board[x][i-1] != 0) || (i < 14 && b.board[x][i+1] != 0)) {
-				contiguous = true
+			if (x > 0 && b.board[x-1][i] != 0) || (x < 14 && b.board[x+1][i] != 0) || (i > 0 && b.board[x][i-1] != 0) || (i < 14 && b.board[x][i+1] != 0) {
+				return true
 			}
 		}
 	} else {
-		if x+tiles > 14 {
-			return false
-		}
-		if y == 7 && x <= 7 && (x+tiles) >= 7 {
-			centerPlayedHere = true
-		}
-		for i := x; i < 15 && tiles > 0; i++ {
+		for i := x; tiles > 0; i++ {
 			if b.board[i][y] == 0 {
 				tiles--
 			}
-			if !contiguous && ((i > 0 && b.board[i-1][y] != 0) || (i < 14 && b.board[i+1][y] != 0) || (y > 0 && b.board[i][y-1] != 0) || (y < 14 && b.board[i][y+1] != 0)) {
-				contiguous = true
+			if (i > 0 && b.board[i-1][y] != 0) || (i < 14 && b.board[i+1][y] != 0) || (y > 0 && b.board[i][y-1] != 0) || (y < 14 && b.board[i][y+1] != 0) {
+				return true
 			}
 		}
 	}
-	return (centerPlayedHere || (b.board[7][7] != 0 && contiguous)) && tiles == 0
+	return false
 }
 
-func (b *Board) checkWord(x, y int, dir direction, primary bool, plays []byte, scratch []byte) (bool, int) {
+func (b *Board) scoreWord(x, y int, dir direction, plays []byte) int {
 	points := 0
 	wordMult := 1
 	var x2, y2 int
-	fullword := scratch[:0]
+	wordLen := 0
 
 	if dir == DIR_VERT {
 		for y2 = y; y2 > 0 && (plays[cti(x, y2-1)] != 0 || b.board[x][y2-1] != 0); y2-- {
 		}
 		for ; y2 < 15; y2++ {
 			idx := cti(x, y2)
-			char := b.board[x][y2]
-			if char == 0 && plays[idx] != 0 {
-				char = plays[idx]
+			if b.board[x][y2] != 0 {
+				wordLen++
+				points += tilePoints[b.board[x][y2]]
+			} else if plays[idx] != 0 {
+				wordLen++
+				points += tilePoints[plays[idx]]
 				if dw[idx] {
 					wordMult *= 2
 				} else if tw[idx] {
 					wordMult *= 3
 				} else if dl[idx] {
-					points += tilePoints[char]
+					points += tilePoints[plays[idx]]
 				} else if tl[idx] {
-					points += tilePoints[char] + tilePoints[char]
+					points += tilePoints[plays[idx]] + tilePoints[plays[idx]]
 				}
-			}
-			if char == 0 {
+			} else {
 				break
 			}
-			fullword = append(fullword, char)
-			points += tilePoints[char]
 		}
 	} else {
 		for x2 = x; x2 > 0 && (plays[cti(x2-1, y)] != 0 || b.board[x2-1][y] != 0); x2-- {
 		}
 		for ; x2 < 15; x2++ {
 			idx := cti(x2, y)
-			char := b.board[x2][y]
-			if char == 0 && plays[idx] != 0 {
-				char = plays[idx]
+			if b.board[x2][y] != 0 {
+				wordLen++
+				points += tilePoints[b.board[x2][y]]
+			} else if plays[idx] != 0 {
+				wordLen++
+				points += tilePoints[plays[idx]]
 				if dw[idx] {
 					wordMult *= 2
 				} else if tw[idx] {
 					wordMult *= 3
 				} else if dl[idx] {
-					points += tilePoints[char]
+					points += tilePoints[plays[idx]]
 				} else if tl[idx] {
-					points += tilePoints[char] + tilePoints[char]
+					points += tilePoints[plays[idx]] + tilePoints[plays[idx]]
 				}
-			}
-			if char == 0 {
+			} else {
 				break
 			}
-			fullword = append(fullword, char)
-			points += tilePoints[char]
 		}
 	}
-	if len(fullword) == 1 {
-		if primary {
-			return false, 0
-		} else {
-			return true, 0
-		}
-	} else if !b.hasWord(strings.ToUpper(string(fullword))) {
-		return false, 0
+	if wordLen == 1 {
+		return 0
 	}
-	return true, points * wordMult
+	return points * wordMult
 }
 
-func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) {
+func (b *Board) scoreMove(x, y int, tiles string, dir direction) int {
 	playPoints := 0
 	tilei := 0
 	plays := make([]byte, 225)
-	scratch := make([]byte, 0, 10)
 
 	if dir == DIR_VERT {
 		for i := y; len(tiles) > tilei; i++ {
 			if b.board[x][i] == 0 {
 				plays[cti(x, i)] = tiles[tilei]
 				tilei++
-				if valid, points := b.checkWord(x, i, DIR_HORIZ, false, plays, scratch); valid {
-					playPoints += points
-				} else {
-					return false, 0
-				}
+				playPoints += b.scoreWord(x, i, DIR_HORIZ, plays)
 			}
 		}
 	} else {
@@ -203,26 +214,61 @@ func (b *Board) evaluateMove(x, y int, tiles string, dir direction) (bool, int) 
 			if b.board[i][y] == 0 {
 				plays[cti(i, y)] = tiles[tilei]
 				tilei++
-				if valid, points := b.checkWord(i, y, DIR_VERT, false, plays, scratch); valid {
-					playPoints += points
-				} else {
-					return false, 0
-				}
+				playPoints += b.scoreWord(i, y, DIR_VERT, plays)
 			}
 		}
 	}
+	return playPoints + b.scoreWord(x, y, dir, plays)
+}
 
-	if valid, points := b.checkWord(x, y, dir, true, plays, scratch); valid {
-		playPoints += points
+func (b *Board) getPlaySpace(x, y int, dir direction) ([]byte, [][]byte, int) {
+	play := make([]byte, 0)
+	crossPlays := make([][]byte, 0)
+	spaces := 0
+	if dir == DIR_VERT {
+		for y = y; y > 0 && b.board[x][y-1] != 0; y-- {
+		}
+		for i := y; i < 15; i++ {
+			play = append(play, b.board[x][i])
+			var crossPlay []byte = nil
+			if b.board[x][i] == 0 {
+				spaces++
+				var x2, x3 int
+				for x2 = x; x2 > 0 && b.board[x2-1][i] != 0; x2-- {
+				}
+				for x3 = x; x3 < 14 && b.board[x3+1][i] != 0; x3++ {
+				}
+				if x2 < x3 {
+					for j := x2; j <= x3; j++ {
+						crossPlay = append(crossPlay, b.board[j][i])
+					}
+				}
+			}
+			crossPlays = append(crossPlays, crossPlay)
+		}
 	} else {
-		return false, 0
+		for x = x; x > 0 && b.board[x-1][y] != 0; x-- {
+		}
+		for i := x; i < 15; i++ {
+			play = append(play, b.board[i][y])
+			var crossPlay []byte = nil
+			if b.board[i][y] == 0 {
+				spaces++
+				var y2, y3 int
+				for y2 = y; y2 > 0 && b.board[i][y2-1] != 0; y2-- {
+				}
+				for y3 = y; y3 < 14 && b.board[i][y3+1] != 0; y3++ {
+				}
+				if y2 < y3 {
+					for j := y2; j <= y3; j++ {
+						crossPlay = append(crossPlay, b.board[i][j])
+					}
+				}
+			}
+			crossPlays = append(crossPlays, crossPlay)
+		}
 	}
-
-	if plays[cti(7, 7)] == 0 && b.board[7][7] == 0 {
-		return false, 0
-	}
-
-	return true, playPoints
+	return play, crossPlays, spaces
 }
 
 func (b *Board) play(x, y int, word string, dir direction) {
@@ -286,23 +332,24 @@ func permute(s []byte) []string {
 		}
 		return result
 	}
-	subsets := map[string]bool{}
+	subsets := make(map[string]struct{})
 	for _, perm := range _permute(s, 0, nil) {
 		for i := 1; i <= len(s); i++ {
-			subsets[perm[:i]] = true
+			subsets[perm[:i]] = struct{}{}
 		}
 	}
 	keys := make([]string, 0, len(subsets))
-	for key, _ := range subsets {
-		if strings.Count(key, "*") == 1 {
-			wi := strings.Index(key, "*")
-			for c := 'a'; c <= 'z'; c++ {
-				keys = append(keys, key[:wi]+string(c)+key[wi+1:])
+	for key := range subsets {
+		if len(key) > 0 {
+			switch strings.Count(key, "*") {
+			case 1:
+				wi := strings.Index(key, "*")
+				for c := 'a'; c <= 'z'; c++ {
+					keys = append(keys, key[:wi]+string(c)+key[wi+1:])
+				}
+			case 0:
+				keys = append(keys, key)
 			}
-		} else if strings.Count(key, "*") > 0 {
-			continue // TODO
-		} else if len(key) > 0 {
-			keys = append(keys, key)
 		}
 	}
 	for i := len(keys) - 1; i > 0; i-- {
@@ -314,9 +361,9 @@ func permute(s []byte) []string {
 
 func (b *Board) DoTurn(player int) {
 	var playX, playY, playPoints int
-	var playWord string
+	var playTiles string
 	var playDir direction
-	plays := permute(b.ptiles[player])
+	tilesets := permute(b.ptiles[player])
 
 	for _, x := range rand.Perm(15) {
 		for _, y := range rand.Perm(15) {
@@ -324,18 +371,53 @@ func (b *Board) DoTurn(player int) {
 				continue
 			}
 			for _, dir := range []direction{DIR_HORIZ, DIR_VERT} {
-				for wordlen := 0; wordlen < 7; wordlen++ {
-					if !b.checkGeometry(x, y, wordlen, dir) {
+				play, crossPlays, room := b.getPlaySpace(x, y, dir)
+				// fmt.Println("getPlaySpace", x, y, dir, ":", play, crossPlays, room)
+				if room > len(b.ptiles[player]) {
+					room = len(b.ptiles[player])
+				}
+				for tilecount := 1; tilecount <= room; tilecount++ {
+					if !b.checkCenterPlayed(x, y, tilecount, dir) || !b.checkContiguous(x, y, tilecount, dir) {
 						continue
 					}
-					for _, word := range plays {
-						if len(word) != wordlen {
+				TILESETLIST:
+					for _, tileset := range tilesets {
+						if len(tileset) != tilecount {
 							continue
 						}
-						if validPlay, points := b.evaluateMove(x, y, word, dir); validPlay && points > playPoints {
+						f := NewFNV()
+						j := 0
+						for i, v := range play {
+							if v == 0 {
+								if j == len(tileset) {
+									break
+								}
+								f.Add(tileset[j])
+								if crossPlays[i] != nil {
+									f2 := NewFNV()
+									for _, v := range crossPlays[i] {
+										if v == 0 {
+											f2.Add(tileset[j])
+										} else {
+											f2.Add(v)
+										}
+									}
+									if _, ok := b.wordlist[f2.Val()]; !ok {
+										continue TILESETLIST
+									}
+								}
+								j++
+							} else {
+								f.Add(v)
+							}
+						}
+						if _, ok := b.wordlist[f.Val()]; !ok {
+							continue TILESETLIST
+						}
+						if points := b.scoreMove(x, y, tileset, dir); points > playPoints {
 							playX = x
 							playY = y
-							playWord = word
+							playTiles = tileset
 							playPoints = points
 							playDir = dir
 						}
@@ -344,13 +426,13 @@ func (b *Board) DoTurn(player int) {
 			}
 		}
 	}
-	if playWord == "" {
+	if playTiles == "" {
 		fmt.Println("NO WORD FOUND - PASSING")
 		return
 	}
-	b.play(playX, playY, playWord, playDir)
-	fmt.Println("Play", playWord, "for", playPoints, "points")
-	for _, c := range playWord {
+	b.play(playX, playY, playTiles, playDir)
+	fmt.Println("Play", playTiles, "for", playPoints, "points")
+	for _, c := range playTiles {
 		if c >= 'a' && c <= 'z' {
 			c = '*'
 		}
@@ -376,6 +458,6 @@ func main() {
 	for b.PlayersHaveTiles() {
 		b.DoTurn(0)
 		b.DoTurn(1)
-		b.PrintBoard()
 	}
+	b.PrintBoard()
 }
